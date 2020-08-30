@@ -5,6 +5,7 @@ import time
 import sys
 import math
 import random
+import numpy as np
 
 
 
@@ -28,6 +29,13 @@ def num2perc(num, maxNum):
 
 def perc2num(perc, maxNum):
     return ((float(perc) / 100.0) * float(maxNum))
+
+def reverseAngle(angle):
+    # Reverses an angle (degrees)
+    newAngle = angle + 180
+    if newAngle > 360:
+        newAngle -= 360
+    return newAngle
 
 def getPointAvg(lst):
     # Gathers the center of every point in `lst` and returns the average
@@ -103,7 +111,9 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         self.parent = parent   # Look at self.setParentItem(<item>)
         super(Sprite, self).__init__(parent)
 
-        self.connections = []
+        self.connections = {}
+        # Structure: {<sprite>: <angle>}
+        # Angle is in degrees
 
         if image:
             self.pixmap = QtGui.QPixmap(image)
@@ -114,10 +124,8 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         self.setAcceptTouchEvents(True)
 
         self.collisionInt = float(collisionInt)   # The interval at which to wait before calling "self.collision" again
-        self.lastCollision = time.time() - self.collisionInt
-        self.lastItemsList = []   # The last list of collision items this object collided with to help keep track of collisions
-        # `self.collision` is called with ( self, [<itemsList>] )
-        # "[<itemsList>]" is a list of all items this sprite is colliding with
+        self.collisions = {}
+        # Structure: {<item>: <time.time()>}
 
         self.limitedBoundary = True   # If set to True, this sprite will bounce off the edges of the scene
 
@@ -126,13 +134,13 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
         self.lastUpdated = time.time()
 
-        self.movDirection = [1.0, 1.0]
-        #self.movSpeed = 0.0
+        self.rotation = 0.
+        self.rotate_speed = 0.
         self.vel = [0., 0.]
-        self.friction = 8.0   # The percentage of movement speed to subtract per second
+        self.friction = 8.   # The percentage of movement speed to subtract per second
         # If set to 0, the sprite will not slow down
         self.frictionCutOff = 0.01   # If the movement speed falls below this, it will be set to 0.0 just to help keep things simple
-        self.elasticity = 1.0
+        self.elasticity = 1.
 
         self.mouseHoverFunc = None   # Executes with (self, event)
         self.mouseReleaseFunc = None   # Executes with (self, event)
@@ -172,27 +180,20 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
     def getHeight(self):
         return self.getRect().height()
 
-    def direct(self, direction, invert=False):   # Set "invert" to True if you want the sprite to move away from the target
-        if invert:
-            self.movDirection = [ (self.getCenter().x()-direction.x()), (self.getCenter().y()-direction.y()) ]
-        else:
-            self.movDirection = [ (direction.x()-self.getCenter().x()), (direction.y()-self.getCenter().y()) ]
-        self.movDirection = condition(self.movDirection)
-
     def bump(self, direction, speed, invert=False):
         # Set "invert" to True if you want the sprite to move away from the target
-        #self.direct(direction, invert=invert)
         self.vel = getDirection(self.getCenter().x(), self.getCenter().y(), direction.x(), direction.y())
         self.vel = [i*speed for i in self.vel]
 
-    def collision(self, items):
+    def collision(self, item):
         pass
 
-    def connectTo(self, sprite):
-        if not sprite in self.connections:
-            self.connections.append(sprite)
-        if not self in sprite.connections:
-            sprite.connections.append(self)
+    def collide(self, item):
+        self.collisions[item] = time.time()
+        item.collisions[self] = time.time()
+
+        self.collision(item)
+        item.collision(self)
 
     def bounceOff(self, sprite):
         # calculate normal and tangential unit vectors
@@ -230,9 +231,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
         self.vel[0] -= perc2num(self.friction, self.vel[0]*speed)
         self.vel[1] -= perc2num(self.friction, self.vel[1]*speed)
-
-        xPos = self.x()
-        yPos = self.y()
+        self.rotate_speed -= perc2num(self.friction, self.rotate_speed*speed)
 
         if self.limitedBoundary:
             if self.getRect().left() < 0:   # Too far left
@@ -256,24 +255,24 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
                 if self.vel[1] > 0:
                     self.vel[1] = -self.vel[1]
 
-        for sprite in self.connections:
-            distance = float(spriteDistance(self, sprite))
-            direction = spriteDirection(self, sprite)
-            sDir = spriteDirection(self, sprite)
-
-            sprite.vel = self.vel
-
-
-            if distance > self.getWidth()/3 + sprite.getWidth()/3:
-                pass
+        xPos = self.x()   # Used to set the new x position
+        yPos = self.y()   # Used to set the new y position
 
         for sprite in [s for s in spriteList if s != self]:
             distance = spriteDistance(self, sprite)
 
-            if distance < self.getWidth()/2 + sprite.getWidth()/2:
-                self.bounceOff(sprite)
+            minDistance = 2
+            if sprite in self.connections:
+                minDistance = 3
 
-                jump_distance = self.getWidth()/2 + sprite.getWidth()/2
+            if distance < self.getWidth()/minDistance + sprite.getWidth()/minDistance:
+                if self.parent != sprite and sprite.parent != self:
+                    if self.parent:
+                        self.parent.bounceOff(sprite)
+                    else:
+                        self.bounceOff(sprite)
+
+                jump_distance = self.getWidth()/minDistance + sprite.getWidth()/minDistance
                 jump_distance -= distance
 
                 conditioned_velocity = condition(self.vel)
@@ -286,29 +285,20 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
                 sprite.setX(sprite.x() - jump_x/2)
                 sprite.setX(sprite.x() - jump_y/2)
 
-        #xPos = self.x() + (self.movSpeed * uDiff * self.movDirection[0])
-        #yPos = self.y() + (self.movSpeed * uDiff * self.movDirection[1])
+                for item in self.collisions.copy():
+                    if time.time() - self.collisions[item] >= self.collisionInt:
+                        self.collisions.pop(item)
+
+                if not sprite in self.connections:
+                    if not sprite in self.collisions:
+                        self.collide(sprite)
+
+        self.rotation += self.rotate_speed * uDiff
 
         xPos += self.vel[0] * uDiff
         yPos += self.vel[1] * uDiff
 
         self.setPos(xPos, yPos)
-
-        hit = False
-        preCol = self.getCollisions()
-        collisions = []
-        for i in preCol:
-            if i.parent != self.parent:
-                if self.parent and i.parent:
-                    collisions.append(i)
-        if self.lastItemsList == collisions and len(collisions) > 0 and time.time()-self.lastCollision >= self.collisionInt:
-            hit = True
-        elif collisions != self.lastItemsList and len(collisions) > 0:
-            hit = True
-        if hit:
-            self.collision(collisions)
-            self.lastCollision = time.time()
-            self.lastItemsList = collisions
 
         self.update()
 
@@ -377,6 +367,7 @@ class Ui_MainWindow(object):
         print("Position: {}, {}".format(pos.x(), pos.y()))
 
         self.environment.sprites[0].bump(pos, 500)
+        self.environment.sprites[0].rotate_speed = 50
 
     def worldTimerEvent(self, event):
         self.environment.update(speed=1)
@@ -393,18 +384,14 @@ if __name__ == "__main__":
         myapp.setupEnvironment()
 
         sprite1 = myapp.environment.addSprite([300,300], 40, 40, image="dot.png")
-        sprite2 = myapp.environment.addSprite([400,400], 40, 40, image="dot.png")
-        sprite3 = myapp.environment.addSprite([480,480], 20, 20, image="dot.png")
+        sprite2 = myapp.environment.addSprite([320,320], 40, 40, image="dot.png")
+        #sprite3 = myapp.environment.addSprite([480,480], 20, 20, image="dot.png")
         #sprite4 = myapp.environment.addSprite([400,460], 20, 20, image="dot.png")
 
         for i in range(42):
             size = random.randrange(10, 50)
             pos = [random.randrange(50, 1000), random.randrange(50, 1000)]
             myapp.environment.addSprite(pos, size, size, image="dot.png")
-
-        #sprite1.connectTo(sprite2)
-        #sprite1.connectTo(sprite3)
-        #sprite1.connectTo(sprite4)
 
         window.show()
         sys.exit(app.exec_())
