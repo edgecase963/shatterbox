@@ -261,18 +261,19 @@ class Environment():
                         pymunk.Segment(static_body, (0, height), (width, height), 0.0),
                         pymunk.Segment(static_body, (width, height), (width, 0), 0.0),
                         pymunk.Segment(static_body, (width, 0), (0, 0), 0.0)]
+
         for line in static_lines:
             line.elasticity = 0.95
             line.friction = 0.9
         self.space.add(static_lines)
+
+        self.scene.mouseReleaseEvent = self.worldMouseReleaseEvent
 
         # Setup timer
         #--
         self.worldView.timer = QtCore.QBasicTimer()
 
         self.worldView.timerEvent = self.update
-        #self.mouseReleaseEvent = self.worldMouseReleaseEvent
-        self.scene.mouseReleaseEvent = self.worldMouseReleaseEvent
 
         self.worldView.timer.start(self.updateSpeed, self.worldView)
         #--
@@ -357,8 +358,9 @@ if __name__ == "__main__":
         myapp = Ui_MainWindow()
 
         myapp.setupUi(window)
-        #myapp.setupEnvironment()
+
         env = setupEnvironment(myapp.worldView, myapp.scene)
+        # QGraphicsView, QGraphicsScene
 
         sprite1 = env.addSprite([300,300], 40, 40, image="dot.png")
         sprite2 = env.addSprite([320,320], 40, 40, image="dot.png")
