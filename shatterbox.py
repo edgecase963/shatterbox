@@ -104,11 +104,23 @@ def spriteDistance(sprite1, sprite2):
     y2 = sprite2.getCenter().y()
     return calculateDistance(x1, y1, x2, y2)
 
+def makeCircle(radius, friction=.3, elasticity=.5, mass=10):
+    inertia = pymunk.moment_for_circle(mass, 0, radius, (0,0))
+
+    body = pymunk.Body(mass, inertia)
+
+    shape = pymunk.Circle(body, radius, Vec2d(0,0))
+    shape.friction = friction
+    shape.elasticity = elasticity
+    shape.sprite = None
+
+    return body, shape
+
 
 
 class Sprite(QtWidgets.QGraphicsPixmapItem):
-    def __init__(self, pos, width, height, environment,
-                 mass=10, friction=.3, elasticity=.5, image=None, parent=None, collisionInt=.5):
+    def __init__(self, pos, width, height, environment, body, shape,
+                 image=None, parent=None, collisionInt=.5):
         # "pos" should be a QtCore.QPointF class
 
         self.parent = parent   # Look at self.setParentItem(<item>)
@@ -142,27 +154,24 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
         self.radius = width/2
 
-        inertia = pymunk.moment_for_circle(mass, 0, self.radius, (0,0))
-
-        self.body = pymunk.Body(mass, inertia)
+        self.body = body
         self.body.position = pos
 
-        self.shape = pymunk.Circle(self.body, self.radius, Vec2d(0,0))
-        self.shape.friction = friction
-        self.shape.elasticity = elasticity
+        inertia = pymunk.moment_for_circle(self.body.mass, 0, self.radius, (0,0))
+
+        self.shape = shape
         self.shape.sprite = self
+
+        #--
 
         self.connections = {}
         # Structure: {<Sprite>: <pymunk.PinJoint>}
 
-        #--
 
         #self.setPos(self.xPos, self.yPos)
         self.setPos(pos[0], pos[1])
 
         self.lastUpdated = time.time()
-
-        self.elasticity = 1.
 
         self.mouseHoverFunc = None   # Executes with (self, event)
         self.mouseReleaseFunc = None   # Executes with (self, event)
@@ -200,6 +209,8 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         # Set "invert" to True if you want the sprite to move away from the target
         newVel = getDirection(self.body.position[0], self.body.position[1], direction[0], direction[1])
         newVel = [i*speed for i in newVel]
+        if invert:
+            newVel = [-i for i in newVel]
         self.body.velocity = Vec2d(newVel)
 
     def collision(self, item):
@@ -279,10 +290,13 @@ class Environment():
         #--
 
         self.scene.keyPressEvent = self.keyPressEvent
+        self.scene.keyReleaseEvent = self.keyReleaseEvent
 
     def keyPressEvent(self, e):
-        if e.key() == QtCore.Qt.Key_A:
-            print(1)
+        pass
+
+    def keyReleaseEvent(self, e):
+        pass
 
     def collision(self, arbiter, space, data):
         shape1, shape2 = arbiter._get_shapes()
@@ -307,7 +321,8 @@ class Environment():
         self.scene.update( self.scene.sceneRect() )
 
     def addSprite(self, xy, width, height, mass=10, friction=.3, elasticity=.5, image=None, parent=None):
-        newSprite = Sprite(xy, width, height, self, mass=mass, friction=friction, elasticity=elasticity, image=image, parent=parent)
+        body, shape = makeCircle(width/2, friction=friction, elasticity=elasticity, mass=mass)
+        newSprite = Sprite(xy, width, height, self, body, shape, image=image, parent=parent)
         self.scene.addItem(newSprite)
         self.sprites.append(newSprite)
         self.space.add(newSprite.body, newSprite.shape)

@@ -1,2 +1,2 @@
-# shatterbox
-A simple particle/physics simulation module made to be used with a QGraphicsView class in PyQt5
+# Shatterbox
+Shatterbox allows the easy use of pymunk in PyQt5. This lets a developer combine a more powerful UI system with a powerful physics engine.
