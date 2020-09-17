@@ -251,7 +251,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
 
 class Environment():
-    def __init__(self, worldView, scene, width, height, friction=20., gravity=0):
+    def __init__(self, worldView, scene, width, height, friction=20., gravity=0, frameWidth=3.0):
         self.worldView = worldView
         self.scene = scene
         self.friction = friction   # The percentage of movement speed to subtract per second
@@ -268,10 +268,10 @@ class Environment():
         ch.post_solve = self.collision
 
         static_body = self.space.static_body
-        static_lines = [pymunk.Segment(static_body, (0, 0), (0, height), 0.0),
-                        pymunk.Segment(static_body, (0, height), (width, height), 0.0),
-                        pymunk.Segment(static_body, (width, height), (width, 0), 0.0),
-                        pymunk.Segment(static_body, (width, 0), (0, 0), 0.0)]
+        static_lines = [pymunk.Segment(static_body, (0, 0), (0, height), frameWidth),
+                        pymunk.Segment(static_body, (0, height), (width, height), frameWidth),
+                        pymunk.Segment(static_body, (width, height), (width, 0), frameWidth),
+                        pymunk.Segment(static_body, (width, 0), (0, 0), frameWidth)]
 
         for line in static_lines:
             line.elasticity = 0.95
@@ -320,7 +320,7 @@ class Environment():
             sprite.updateSprite(self.sprites, self.worldSpeed)
         self.scene.update( self.scene.sceneRect() )
 
-    def addSprite(self, xy, width, height, mass=10, friction=.3, elasticity=.5, image=None, parent=None):
+    def add_ball_sprite(self, xy, width, height, mass=10, friction=.3, elasticity=.5, image=None, parent=None):
         body, shape = makeCircle(width/2, friction=friction, elasticity=elasticity, mass=mass)
         newSprite = Sprite(xy, width, height, self, body, shape, image=image, parent=parent)
         self.scene.addItem(newSprite)
@@ -377,22 +377,18 @@ if __name__ == "__main__":
         env = setupEnvironment(myapp.worldView, myapp.scene)
         # QGraphicsView, QGraphicsScene
 
-        sprite1 = env.addSprite([300,300], 40, 40, image="dot.png")
-        sprite2 = env.addSprite([320,320], 40, 40, image="dot.png")
-
-        sprite1.ff = True
-        sprite2.ff = False
+        sprite1 = env.add_ball_sprite([300,300], 40, 40, image="dot.png")
+        sprite2 = env.add_ball_sprite([320,320], 40, 40, image="dot.png")
 
         sprite1.connectTo(sprite2)
 
-        #sprite3 = env.addSprite([480,480], 20, 20, image="dot.png")
-        #sprite4 = env.addSprite([400,460], 20, 20, image="dot.png")
+        #sprite3 = env.add_ball_sprite([480,480], 20, 20, image="dot.png")
+        #sprite4 = env.add_ball_sprite([400,460], 20, 20, image="dot.png")
 
         for i in range(80):
             size = random.randrange(10, 50)
             pos = [random.randrange(50, 1000), random.randrange(50, 1000)]
-            sprite = env.addSprite(pos, size, size, image="dot.png")
-            sprite.ff = False
+            sprite = env.add_ball_sprite(pos, size, size, image="dot.png")
 
         window.show()
         sys.exit(app.exec_())
