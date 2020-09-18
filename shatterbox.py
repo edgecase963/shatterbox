@@ -26,6 +26,7 @@ except AttributeError:
         return QtWidgets.QApplication.translate(context, text, disambig)
 
 
+
 def num2perc(num, maxNum):
     return ((float(num) / float(maxNum)) * 100.0)
 
@@ -227,19 +228,25 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         self.connections[sprite] = c
         sprite.connections[self] = c
 
-    def updateSprite(self, spriteList, speed):
+    def updateSprite(self):
         uDiff = time.time() - self.lastUpdated
-        uDiff = uDiff * speed
 
         self.setPos(self.body.position[0]-self.radius, self.body.position[1]-self.radius)
 
-        frictionCut = self.environment.friction * uDiff
+        frictionCutX = perc2num(self.environment.friction, self.body.velocity[0])
+        frictionCutY = perc2num(self.environment.friction, self.body.velocity[1])
+        frictionCutA = perc2num(self.environment.friction, self.body.angular_velocity)
+
+        frictionCutX *= uDiff
+        frictionCutY *= uDiff
+        frictionCutA *= uDiff
+
         newVel = list(self.body.velocity)
-        newVel = [i-(i*frictionCut) for i in newVel]
+        newVel = [newVel[0]-frictionCutX, newVel[1]-frictionCutY]
 
         self.body.velocity = Vec2d(newVel)
 
-        self.body.angular_velocity -= self.body.angular_velocity * frictionCut
+        self.body.angular_velocity -= frictionCutA
 
         angle = math.degrees(self.body.angle)
 
@@ -251,7 +258,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
 
 class Environment():
-    def __init__(self, worldView, scene, width, height, friction=20., gravity=0, frameWidth=3.0):
+    def __init__(self, worldView, scene, width, height, friction=60.0, gravity=0, frameWidth=3.0):
         self.worldView = worldView
         self.scene = scene
         self.friction = friction   # The percentage of movement speed to subtract per second
@@ -317,7 +324,7 @@ class Environment():
     def update(self, event):
         self.space.step(self.worldSpeed)
         for sprite in self.sprites:
-            sprite.updateSprite(self.sprites, self.worldSpeed)
+            sprite.updateSprite()
         self.scene.update( self.scene.sceneRect() )
 
     def add_ball_sprite(self, xy, width, height, mass=10, friction=.3, elasticity=.5, image=None, parent=None):
@@ -330,7 +337,7 @@ class Environment():
 
 
 
-def setupEnvironment(worldView, scene, friction=20., gravity=0):
+def setupEnvironment(worldView, scene, friction=60.0, gravity=0):
     # worldView should be a `QGraphicsView` item
     # scene should be a `QGraphicsScene` item
     sceneRect = scene.sceneRect()
@@ -378,7 +385,7 @@ if __name__ == "__main__":
         # QGraphicsView, QGraphicsScene
 
         sprite1 = env.add_ball_sprite([300,300], 40, 40, image="dot.png")
-        sprite2 = env.add_ball_sprite([320,320], 40, 40, image="dot.png")
+        sprite2 = env.add_ball_sprite([322,322], 40, 40, image="dot.png")
 
         sprite1.connectTo(sprite2)
 
