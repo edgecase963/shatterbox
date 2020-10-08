@@ -158,8 +158,6 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         self.body = body
         self.body.position = pos
 
-        inertia = pymunk.moment_for_circle(self.body.mass, 0, self.radius, (0,0))
-
         self.shape = shape
         self.shape.sprite = self
 
@@ -218,15 +216,28 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         pass
 
     def connectTo(self, sprite):
+        if sprite in self.connections:
+            return
+        #joint = pymunk.DampedSpring(self.body, sprite.body, (0,0), (0,0), 2, 150, 20)
+        joint = pymunk.PinJoint(self.body, sprite.body, [0,0], [0,0])
         # angle is in degrees
-        direction = getDirection(self.getCenter().x(), self.getCenter().y(), sprite.getCenter().x(), sprite.getCenter().y())
+        #direction = getDirection(self.getCenter().x(), self.getCenter().y(), sprite.getCenter().x(), sprite.getCenter().y())
 
-        point1 = (direction[0]*self.radius, direction[1]*self.radius)
-        point2 = (-direction[0]*self.radius, -direction[1]*self.radius)
-        c = pymunk.PinJoint(self.body, sprite.body, point1, point2)
-        self.body.space.add(c)
-        self.connections[sprite] = c
-        sprite.connections[self] = c
+        #point1 = (direction[0]*self.radius, direction[1]*self.radius)
+        #point2 = (-direction[0]*self.radius, -direction[1]*self.radius)
+
+        #joint = pymunk.PinJoint(self.body, sprite.body, point1, point2)
+
+        self.body.space.add(joint)
+        self.connections[sprite] = joint
+        sprite.connections[self] = joint
+
+    def disconnectFrom(self, sprite):
+        if sprite in self.connections:
+            joint = self.connections[sprite]
+            self.connections.pop(sprite)
+            sprite.connections.pop(self)
+            self.body.space.remove(joint)
 
     def updateSprite(self):
         uDiff = time.time() - self.lastUpdated
@@ -258,7 +269,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
 
 class Environment():
-    def __init__(self, worldView, scene, width, height, friction=60.0, gravity=0, frameWidth=3.0):
+    def __init__(self, worldView, scene, width, height, friction=60.0, gravity=(0, 0), frameWidth=3.0):
         self.worldView = worldView
         self.scene = scene
         self.friction = friction   # The percentage of movement speed to subtract per second
@@ -266,7 +277,7 @@ class Environment():
         self.sprites = []
         # A list containing all sprites in this environment
         self.space = pymunk.Space()
-        self.space.gravity = 0, 0
+        self.space.gravity = gravity
 
         self.worldSpeed = .02
         self.updateSpeed = 50
@@ -327,6 +338,20 @@ class Environment():
             sprite.updateSprite()
         self.scene.update( self.scene.sceneRect() )
 
+    def removeSprite(self, sprite):
+        if not sprite in self.sprites:
+            return
+        for sp in sprite.connections.copy():
+            sprite.disconnectFrom(sp)
+        self.space.remove(sprite.body, sprite.shape)
+        self.scene.removeItem(sprite)
+        self.sprites.remove(sprite)
+
+    def add_sprite(self, sprite):
+        self.scene.addItem(sprite)
+        self.sprites.append(sprite)
+        self.space.add(sprite.body, sprite.shape)
+
     def add_ball_sprite(self, xy, width, height, mass=10, friction=.3, elasticity=.5, image=None, parent=None):
         body, shape = makeCircle(width/2, friction=friction, elasticity=elasticity, mass=mass)
         newSprite = Sprite(xy, width, height, self, body, shape, image=image, parent=parent)
@@ -337,7 +362,7 @@ class Environment():
 
 
 
-def setupEnvironment(worldView, scene, friction=60.0, gravity=0):
+def setupEnvironment(worldView, scene, friction=60.0, gravity=(0, 0)):
     # worldView should be a `QGraphicsView` item
     # scene should be a `QGraphicsScene` item
     sceneRect = scene.sceneRect()
