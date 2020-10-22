@@ -121,7 +121,7 @@ def makeCircle(radius, friction=.3, elasticity=.5, mass=10):
 
 class Sprite(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pos, width, height, environment, body, shape,
-                 image=None, parent=None, collisionInt=.5):
+                 image=None, parent=None):
         # "pos" should be a QtCore.QPointF class
 
         self.parent = parent   # Look at self.setParentItem(<item>)
@@ -141,12 +141,10 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
         #self.setFlag(QtGui.QGraphicsPixmapItem.ItemIsSelectable)
         #self.setFlag(QtGui.QGraphicsPixmapItem.ItemIsMovable)
+        self.setEnabled(True)
         self.setAcceptHoverEvents(True)
         self.setAcceptTouchEvents(True)
-
-        self.collisionInt = float(collisionInt)   # The interval at which to wait before calling "self.collision" again
-        self.collisions = {}
-        # Structure: {<item>: <time.time()>}
+        self.setAcceptedMouseButtons(QtCore.Qt.AllButtons)
 
         self.limitedBoundary = True   # If set to True, this sprite will bounce off the edges of the scene
 
@@ -156,6 +154,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         self.radius = width/2
 
         self.body = body
+        #self.body.position = [i + self.radius for i in pos]
         self.body.position = pos
 
         self.shape = shape
@@ -168,23 +167,27 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
 
         #self.setPos(self.xPos, self.yPos)
-        self.setPos(pos[0], pos[1])
+        #self.setPos(pos[0], pos[1])
+        self.setPos(pos[0]-self.radius, pos[1]-self.radius)
 
         self.lastUpdated = time.time()
 
-        self.mouseHoverFunc = None   # Executes with (self, event)
-        self.mouseReleaseFunc = None   # Executes with (self, event)
-        self.mousePressFunc = None   # Executes with (self, event)
+        #self.mouseHoverFunc = None   # Executes with (self, event)
+        #self.mouseReleaseFunc = None   # Executes with (self, event)
+        #self.mousePressFunc = None   # Executes with (self, event)
+        self.mouseDoubleClickFunc = None # Executes with (self, event)
 
-    def mousePressEvent(self, event):
-        if self.mousePressFunc != None:
-            self.mousePressFunc(self, event)
-    def mouseReleaseEvent(self, event):
-        if self.mouseReleaseFunc != None:
-            self.mouseReleaseFunc(self, event)
-    def hoverEnterEvent(self, event):
-        if self.mouseHoverFunc != None:
-            self.mouseHoverFunc(self, event)
+    #def mousePressEvent(self, event):
+    #    if self.mousePressFunc != None:
+    #        self.mousePressFunc(self, event)
+    #def mouseReleaseEvent(self, event):
+    #    if self.mouseReleaseFunc != None:
+    #        self.mouseReleaseFunc(self, event)
+    #def hoverEnterEvent(self, event):
+    #    if self.mouseHoverFunc != None:
+    #        self.mouseHoverFunc(self, event)
+    def mouseDoubleClickEvent(self, event):
+        pass
 
     def scale(self, width, height):
         tempPixmap = self.pixmap.scaled(width, height, QtCore.Qt.KeepAspectRatio)
@@ -198,6 +201,9 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
         return getPointAvg(aList)
     def getRect(self):
         return self.sceneBoundingRect()
+
+    def getPos(self):
+        return [self.pos().x(), self.pos().y()]
 
     def getWidth(self):
         return self.getRect().width()
@@ -215,11 +221,15 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
     def collision(self, item):
         pass
 
-    def connectTo(self, sprite):
+    def connectTo(self, sprite, rigid=True):
         if sprite in self.connections:
             return
         #joint = pymunk.DampedSpring(self.body, sprite.body, (0,0), (0,0), 2, 150, 20)
-        joint = pymunk.PinJoint(self.body, sprite.body, [0,0], [0,0])
+        if rigid:
+            joint = pymunk.PinJoint(self.body, sprite.body, [0,0], [0,0])
+        else:
+            pass
+            #joint = pymunk.DampedSpring(self.body, sprite.body, (0,0), (0,0), 2, 150, 20)
         # angle is in degrees
         #direction = getDirection(self.getCenter().x(), self.getCenter().y(), sprite.getCenter().x(), sprite.getCenter().y())
 
@@ -269,7 +279,7 @@ class Sprite(QtWidgets.QGraphicsPixmapItem):
 
 
 class Environment():
-    def __init__(self, worldView, scene, width, height, friction=60.0, gravity=(0, 0), frameWidth=3.0):
+    def __init__(self, worldView, scene, width, height, friction=60.0, gravity=(0, 0), frameWidth=5.0):
         self.worldView = worldView
         self.scene = scene
         self.friction = friction   # The percentage of movement speed to subtract per second
@@ -279,6 +289,9 @@ class Environment():
         self.space = pymunk.Space()
         self.space.gravity = gravity
 
+        self.width = width
+        self.height = height
+
         self.worldSpeed = .02
         self.updateSpeed = 50
 
@@ -286,10 +299,10 @@ class Environment():
         ch.post_solve = self.collision
 
         static_body = self.space.static_body
-        static_lines = [pymunk.Segment(static_body, (0, 0), (0, height), frameWidth),
+        static_lines = [pymunk.Segment(static_body, (0, frameWidth), (0, height), frameWidth),
                         pymunk.Segment(static_body, (0, height), (width, height), frameWidth),
-                        pymunk.Segment(static_body, (width, height), (width, 0), frameWidth),
-                        pymunk.Segment(static_body, (width, 0), (0, 0), frameWidth)]
+                        pymunk.Segment(static_body, (width, height), (width, frameWidth), frameWidth),
+                        pymunk.Segment(static_body, (width, frameWidth), (0, frameWidth), frameWidth)]
 
         for line in static_lines:
             line.elasticity = 0.95
@@ -297,6 +310,7 @@ class Environment():
         self.space.add(static_lines)
 
         self.scene.mouseReleaseEvent = self.worldMouseReleaseEvent
+        self.scene.mousePressEvent = self.worldMousePressEvent
 
         # Setup timer
         #--
@@ -310,10 +324,19 @@ class Environment():
         self.scene.keyPressEvent = self.keyPressEvent
         self.scene.keyReleaseEvent = self.keyReleaseEvent
 
-    def keyPressEvent(self, e):
+        self.mousePressFunc = None
+        self.mouseReleaseFunc = None
+        # These both execute with ( [x, y] )
+
+    def sprite_under_mouse(self):
+        for sprite in self.sprites:
+            if sprite.isUnderMouse():
+                return sprite
+
+    def keyPressEvent(self, event):
         pass
 
-    def keyReleaseEvent(self, e):
+    def keyReleaseEvent(self, event):
         pass
 
     def collision(self, arbiter, space, data):
@@ -326,17 +349,34 @@ class Environment():
             sprite2.collision(sprite1)
 
     def worldMouseReleaseEvent(self, event):
-        pos = event.lastScenePos()
+        if self.mouseReleaseFunc:
+            pos = event.lastScenePos()
+            x = pos.x()
+            y = pos.y()
+            self.mouseReleaseFunc(event, [x, y])
 
-        print("Position: {}, {}".format(pos.x(), pos.y()))
+    def worldMousePressEvent(self, event):
+        if self.mousePressFunc:
+            pos = event.lastScenePos()
+            x = pos.x()
+            y = pos.y()
+            self.mousePressFunc(event, [x, y])
 
-        self.sprites[0].bump([pos.x(), pos.y()], 600)
+    def preUpdateEvent(self):
+        # Can be assigned so that another chunk of code is processed before the environment updates
+        pass
+
+    def postUpdateEvent(self):
+        # Can be assigned so that another chunk of code is processed after the environment updates
+        pass
 
     def update(self, event):
+        self.preUpdateEvent()
         self.space.step(self.worldSpeed)
         for sprite in self.sprites:
             sprite.updateSprite()
         self.scene.update( self.scene.sceneRect() )
+        self.postUpdateEvent()
 
     def removeSprite(self, sprite):
         if not sprite in self.sprites:
