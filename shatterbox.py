@@ -300,7 +300,7 @@ class Environment():
 
         static_body = self.space.static_body
         static_lines = [pymunk.Segment(static_body, (0, frameWidth), (0, height), frameWidth),
-                        pymunk.Segment(static_body, (0, height), (width, height), frameWidth),
+                        pymunk.Segment(static_body, (frameWidth, height), (width, height), frameWidth),
                         pymunk.Segment(static_body, (width, height), (width, frameWidth), frameWidth),
                         pymunk.Segment(static_body, (width, frameWidth), (0, frameWidth), frameWidth)]
 
